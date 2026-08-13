@@ -51,10 +51,9 @@ export function playAudioWithPromise(url: string): Promise<void> {
 }
 
 export function playPositiveFeedback(): Promise<void> {
-  // Alternating or random between 01_raea and 02_momtaz
+  // Alternating between 01_raea and 02_momtaz
   positiveToggle = !positiveToggle;
   const chosenAudio = positiveToggle ? FEEDBACK_AUDIO.raea : FEEDBACK_AUDIO.momtaz;
-  playSuccessKidsSFX();
   return playAudioWithPromise(chosenAudio);
 }
 

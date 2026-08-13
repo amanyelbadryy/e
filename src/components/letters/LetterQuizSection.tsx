@@ -50,7 +50,6 @@ export const LetterQuizSection: React.FC<LetterQuizSectionProps> = ({ onBack, on
     if (selectedOption !== null || isProcessingAnswer) return; // Prevent double clicking
 
     setIsProcessingAnswer(true);
-    playButtonClickSFX();
     setSelectedOption(option);
     const correct = option === currentQuestion.correctAnswer;
     setIsAnswerCorrect(correct);

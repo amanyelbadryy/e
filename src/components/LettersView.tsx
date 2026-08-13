@@ -58,7 +58,6 @@ export const LettersView: React.FC = () => {
   };
 
   const handleSelectLetterByIndex = (index: number) => {
-    playButtonClickSFX();
     setCurrentLetterIndex(index);
     playMP3(ALPHABET_DATA[index].audio);
   };

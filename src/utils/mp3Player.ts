@@ -23,30 +23,85 @@ const STORAGE_KEYS = {
   bgExecution: 'alab_w_amrah_bg_execution',
 };
 
+// Safe LocalStorage helpers for iframe / restricted web contexts
+function safeGetItem(key: string): string | null {
+  try {
+    return typeof window !== 'undefined' && window.localStorage ? localStorage.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeSetItem(key: string, val: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(key, val);
+    }
+  } catch {
+    // Ignore storage quota/permission exceptions
+  }
+}
+
+function safeRemoveItem(key: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore
+  }
+}
+
 // In-memory session state for background music (resets to default on every fresh launch / reload)
 let sessionBgMusicEnabled = true;
 let sessionBgMusicVolume = 0.03;
+
+/**
+ * تحويل مسار الملف الصوتي إلى URL صالح ومُرمز للويب
+ */
+export function resolveAudioUrl(url: string): string {
+  if (!url) return '';
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('blob:')
+  ) {
+    return encodeURI(url);
+  }
+
+  // Get base URL from Vite (handles relative, root '/', or custom subpath hosting)
+  const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as { env?: { BASE_URL?: string } }).env : undefined;
+  const baseUrl = metaEnv && metaEnv.BASE_URL ? metaEnv.BASE_URL : '/';
+
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+
+  // Avoid duplicate base if URL already includes base
+  const fullPath =
+    normalizedBase && normalizedBase !== '' && cleanPath.startsWith(normalizedBase)
+      ? cleanPath
+      : `${normalizedBase}${cleanPath}`;
+
+  return encodeURI(fullPath);
+}
 
 /**
  * استرجاع إعدادات التطبيق الحالية
  */
 export function getAppSettings(): AppSettings {
   // Clear any legacy localStorage values for background music to ensure fresh session defaults
-  try {
-    localStorage.removeItem(STORAGE_KEYS.bgMusic);
-    localStorage.removeItem(STORAGE_KEYS.bgMusicVol);
-  } catch (e) {
-    // Ignore storage exceptions if any
-  }
+  safeRemoveItem(STORAGE_KEYS.bgMusic);
+  safeRemoveItem(STORAGE_KEYS.bgMusicVol);
 
-  const sfx = localStorage.getItem(STORAGE_KEYS.sfx);
-  const pronunciation = localStorage.getItem(STORAGE_KEYS.pronunciation);
+  const sfx = safeGetItem(STORAGE_KEYS.sfx);
+  const pronunciation = safeGetItem(STORAGE_KEYS.pronunciation);
 
-  const sfxVol = localStorage.getItem(STORAGE_KEYS.sfxVol);
-  const pronunciationVol = localStorage.getItem(STORAGE_KEYS.pronunciationVol);
+  const sfxVol = safeGetItem(STORAGE_KEYS.sfxVol);
+  const pronunciationVol = safeGetItem(STORAGE_KEYS.pronunciationVol);
 
-  const notifications = localStorage.getItem(STORAGE_KEYS.notifications);
-  const bgExecution = localStorage.getItem(STORAGE_KEYS.bgExecution);
+  const notifications = safeGetItem(STORAGE_KEYS.notifications);
+  const bgExecution = safeGetItem(STORAGE_KEYS.bgExecution);
 
   return {
     backgroundMusicEnabled: sessionBgMusicEnabled,
@@ -76,11 +131,11 @@ export function saveAppSettings(newSettings: Partial<AppSettings>): AppSettings 
   }
 
   if (newSettings.soundEffectsEnabled !== undefined) {
-    localStorage.setItem(STORAGE_KEYS.sfx, newSettings.soundEffectsEnabled.toString());
+    safeSetItem(STORAGE_KEYS.sfx, newSettings.soundEffectsEnabled.toString());
   }
 
   if (newSettings.pronunciationEnabled !== undefined) {
-    localStorage.setItem(STORAGE_KEYS.pronunciation, newSettings.pronunciationEnabled.toString());
+    safeSetItem(STORAGE_KEYS.pronunciation, newSettings.pronunciationEnabled.toString());
   }
 
   if (newSettings.backgroundMusicVolume !== undefined) {
@@ -93,20 +148,20 @@ export function saveAppSettings(newSettings: Partial<AppSettings>): AppSettings 
 
   if (newSettings.soundEffectsVolume !== undefined) {
     const vol = Math.max(0, Math.min(1, newSettings.soundEffectsVolume));
-    localStorage.setItem(STORAGE_KEYS.sfxVol, vol.toString());
+    safeSetItem(STORAGE_KEYS.sfxVol, vol.toString());
   }
 
   if (newSettings.pronunciationVolume !== undefined) {
     const vol = Math.max(0, Math.min(1, newSettings.pronunciationVolume));
-    localStorage.setItem(STORAGE_KEYS.pronunciationVol, vol.toString());
+    safeSetItem(STORAGE_KEYS.pronunciationVol, vol.toString());
   }
 
   if (newSettings.notificationsEnabled !== undefined) {
-    localStorage.setItem(STORAGE_KEYS.notifications, newSettings.notificationsEnabled.toString());
+    safeSetItem(STORAGE_KEYS.notifications, newSettings.notificationsEnabled.toString());
   }
 
   if (newSettings.backgroundExecutionEnabled !== undefined) {
-    localStorage.setItem(STORAGE_KEYS.bgExecution, newSettings.backgroundExecutionEnabled.toString());
+    safeSetItem(STORAGE_KEYS.bgExecution, newSettings.backgroundExecutionEnabled.toString());
   }
 
   return getAppSettings();
@@ -137,12 +192,14 @@ export function initLazyBackgroundMusic(musicUrl: string = DEFAULT_BG_MUSIC_URL)
       }
       window.removeEventListener('click', handleUserInteraction);
       window.removeEventListener('touchstart', handleUserInteraction);
+      window.removeEventListener('pointerdown', handleUserInteraction);
       window.removeEventListener('keydown', handleUserInteraction);
       autoplayListenerAttached = false;
     };
 
     window.addEventListener('click', handleUserInteraction, { once: true });
-    window.addEventListener('touchstart', handleUserInteraction, { once: true });
+    window.addEventListener('touchstart', handleUserInteraction, { once: true, passive: true });
+    window.addEventListener('pointerdown', handleUserInteraction, { once: true });
     window.addEventListener('keydown', handleUserInteraction, { once: true });
   }
 }
@@ -157,18 +214,27 @@ export function playBackgroundMusic(musicUrl: string = DEFAULT_BG_MUSIC_URL): vo
     return;
   }
 
+  const resolvedUrl = resolveAudioUrl(musicUrl);
+
   if (!bgAudioInstance) {
-    bgAudioInstance = new Audio(musicUrl);
+    bgAudioInstance = new Audio(resolvedUrl);
     bgAudioInstance.loop = true;
+    bgAudioInstance.preload = 'auto';
+  } else if (bgAudioInstance.src !== resolvedUrl && !bgAudioInstance.src.endsWith(resolvedUrl)) {
+    bgAudioInstance.src = resolvedUrl;
   }
 
   bgAudioInstance.volume = settings.backgroundMusicVolume;
 
   if (bgAudioInstance.paused) {
-    bgAudioInstance.play().catch(() => {
-      // إذا منع المتصفح التشغيل التلقائي حتى بعد الاستدعاء، ننتظر تفاعلاً إضافياً
-      initLazyBackgroundMusic(musicUrl);
-    });
+    const playPromise = bgAudioInstance.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.warn('[MP3 Player] Background music autoplay waiting for interaction:', err?.message || err);
+        // إذا منع المتصفح التشغيل التلقائي، ننتظر تفاعلاً حقيقياً
+        initLazyBackgroundMusic(musicUrl);
+      });
+    }
   }
 }
 
@@ -263,58 +329,26 @@ export function isPronunciationAudio(url: string): boolean {
 let currentPronunciationAudio: HTMLAudioElement | null = null;
 
 /**
- * Web Audio API synthesized fallback for sound effects if audio file playback fails
- */
-function playSynthesizedSFX(url: string): void {
-  try {
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    const lower = url.toLowerCase();
-    if (lower.includes('click') || lower.includes('button')) {
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(600, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.05);
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.05);
-    } else if (lower.includes('success') || lower.includes('level') || lower.includes('notification')) {
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-      osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1); // E5
-      osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.2); // G5
-      gain.gain.setValueAtTime(0.2, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.35);
-    }
-  } catch {
-    // Ignore audio context errors
-  }
-}
-
-/**
  * تشغيل ملف MP3 محلي فقط (مسار -> HTMLAudioElement -> play)
  */
-export function playMP3(url: string): HTMLAudioElement | null {
-  if (!url) return null;
+export function playMP3(rawUrl: string): HTMLAudioElement | null {
+  if (!rawUrl) return null;
 
+  const url = resolveAudioUrl(rawUrl);
   const settings = getAppSettings();
 
-  if (isFeedbackOrSFX(url)) {
+  if (isFeedbackOrSFX(rawUrl)) {
     if (!settings.soundEffectsEnabled) return null;
-  } else if (isPronunciationAudio(url)) {
+  } else if (isPronunciationAudio(rawUrl)) {
     if (!settings.pronunciationEnabled) return null;
     // Stop any currently playing pronunciation audio to prevent overlap
     if (currentPronunciationAudio) {
-      currentPronunciationAudio.pause();
-      currentPronunciationAudio.currentTime = 0;
+      try {
+        currentPronunciationAudio.pause();
+        currentPronunciationAudio.currentTime = 0;
+      } catch {
+        // Ignore
+      }
       currentPronunciationAudio = null;
     }
   } else if (!settings.soundEffectsEnabled && !settings.pronunciationEnabled) {
@@ -323,16 +357,17 @@ export function playMP3(url: string): HTMLAudioElement | null {
 
   try {
     const audio = new Audio(url);
+    audio.preload = 'auto';
 
-    if (isFeedbackOrSFX(url)) {
+    if (isFeedbackOrSFX(rawUrl)) {
       audio.volume = settings.soundEffectsVolume;
-    } else if (isPronunciationAudio(url)) {
+    } else if (isPronunciationAudio(rawUrl)) {
       audio.volume = settings.pronunciationVolume;
     } else {
       audio.volume = settings.soundEffectsVolume;
     }
 
-    if (isPronunciationAudio(url)) {
+    if (isPronunciationAudio(rawUrl)) {
       currentPronunciationAudio = audio;
       audio.onended = () => {
         if (currentPronunciationAudio === audio) {
@@ -342,25 +377,19 @@ export function playMP3(url: string): HTMLAudioElement | null {
     }
 
     audio.onerror = (e) => {
-      console.warn('[MP3 Player] Audio element loading error:', url, e);
-      if (isFeedbackOrSFX(url)) {
-        playSynthesizedSFX(url);
-      }
+      console.warn('[MP3 Player] Audio file load error for:', url, e);
     };
 
-    audio.play().catch((err) => {
-      console.warn('[MP3 Player] Playback prevented or failed:', url, err);
-      if (isFeedbackOrSFX(url)) {
-        playSynthesizedSFX(url);
-      }
-    });
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.warn('[MP3 Player] Playback prevented or failed:', url, err);
+      });
+    }
 
     return audio;
   } catch (err) {
     console.warn('[MP3 Player] Audio initialization error:', url, err);
-    if (isFeedbackOrSFX(url)) {
-      playSynthesizedSFX(url);
-    }
     return null;
   }
 }
@@ -370,8 +399,12 @@ export function playMP3(url: string): HTMLAudioElement | null {
  */
 export function stopPronunciationAudio(): void {
   if (currentPronunciationAudio) {
-    currentPronunciationAudio.pause();
-    currentPronunciationAudio.currentTime = 0;
+    try {
+      currentPronunciationAudio.pause();
+      currentPronunciationAudio.currentTime = 0;
+    } catch {
+      // Ignore
+    }
     currentPronunciationAudio = null;
   }
 }

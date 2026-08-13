@@ -280,7 +280,6 @@ export const HeroJourney: React.FC<HeroJourneyProps> = ({ onBack, onGoHome, onAd
     if (selectedOption !== null || isProcessingAnswer) return;
 
     setIsProcessingAnswer(true);
-    playButtonClickSFX();
     setSelectedOption(option);
 
     const correct = option === currentQ.correctOption;

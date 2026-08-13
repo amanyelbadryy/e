@@ -24,7 +24,6 @@ export const NumbersView: React.FC = () => {
   const [isQuizActive, setIsQuizActive] = useState<boolean>(false);
 
   const handleSelectNumber = (num: ArabicNumber) => {
-    playButtonClickSFX();
     setSelectedNumber(num);
     setCountedItems([]);
     playMP3(num.audio);
@@ -33,7 +32,6 @@ export const NumbersView: React.FC = () => {
   const handleTapItem = (itemIndex: number) => {
     // Only accept tapping the NEXT sequential element (far right to left)
     if (itemIndex === countedItems.length) {
-      playButtonClickSFX();
       const nextCount = countedItems.length + 1;
       setCountedItems((prev) => [...prev, itemIndex]);
 
@@ -159,7 +157,6 @@ export const NumbersView: React.FC = () => {
             {/* Play Sound Button */}
             <button
               onClick={() => {
-                playButtonClickSFX();
                 playMP3(selectedNumber.audio);
               }}
               className="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white px-8 py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-3 shadow-lg shadow-teal-200 transition-transform active:scale-95 border-2 border-teal-500 cursor-pointer"

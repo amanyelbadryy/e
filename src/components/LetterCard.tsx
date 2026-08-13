@@ -67,7 +67,6 @@ export const LetterCard: React.FC<LetterCardProps> = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              playButtonClickSFX();
               onPlayAudio(effectiveLetterAudio);
             }}
             className="mt-3 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-2xs hover:shadow active:scale-95 transition-all cursor-pointer border border-teal-500 whitespace-nowrap"
@@ -112,7 +111,6 @@ export const LetterCard: React.FC<LetterCardProps> = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              playButtonClickSFX();
               onPlayAudio(effectiveWordAudio);
             }}
             className="mt-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-2xs hover:shadow active:scale-95 transition-all cursor-pointer border border-teal-500 whitespace-nowrap"
