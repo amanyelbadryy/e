@@ -57,7 +57,7 @@ let sessionBgMusicEnabled = true;
 let sessionBgMusicVolume = 0.03;
 
 /**
- * تحويل مسار الملف الصوتي إلى URL صالح ومُرمز للويب
+ * تحويل مسار الملف الصوتي إلى URL صالح ومُرمز للويب ومتوافق مع GitHub Pages والاستضافة الثابتة
  */
 export function resolveAudioUrl(url: string): string {
   if (!url) return '';
@@ -70,18 +70,20 @@ export function resolveAudioUrl(url: string): string {
     return encodeURI(url);
   }
 
-  // Get base URL from Vite (handles relative, root '/', or custom subpath hosting)
+  // Get base URL from Vite (handles relative './', root '/', or custom subpath hosting like GitHub Pages)
   const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as { env?: { BASE_URL?: string } }).env : undefined;
-  const baseUrl = metaEnv && metaEnv.BASE_URL ? metaEnv.BASE_URL : '/';
+  const baseUrl = metaEnv && metaEnv.BASE_URL ? metaEnv.BASE_URL : './';
 
-  const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  // Strip leading slash or relative prefix for clean joining
+  const cleanPath = url.replace(/^(\.\/|\/)/, '');
 
-  // Avoid duplicate base if URL already includes base
-  const fullPath =
-    normalizedBase && normalizedBase !== '' && cleanPath.startsWith(normalizedBase)
-      ? cleanPath
-      : `${normalizedBase}${cleanPath}`;
+  let fullPath = '';
+  if (baseUrl === './' || baseUrl === '') {
+    fullPath = `./${cleanPath}`;
+  } else {
+    const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+    fullPath = `${normalizedBase}${cleanPath}`;
+  }
 
   return encodeURI(fullPath);
 }

@@ -5,11 +5,17 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    base: './',
+    publicDir: 'public',
+    assetsInclude: ['**/*.mp3', '**/*.wav'],
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+    },
+    build: {
+      copyPublicDir: true,
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
