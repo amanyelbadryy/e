@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix العب وامرح",
+  "description": "تطبيق تعليمي تفاعلي للأطفال لتعليم الحروف العربية والحركات والكلمات والأرقام من خلال صور وأزرار وأصوات",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
