@@ -4,7 +4,7 @@ export interface HarakaDetail {
   symbol: string;      // e.g. "أَ"
   audio: string;       // e.g. "/audio/alphabet/fatha/alif_fatha.mp3"
   word: string;        // e.g. "أَسَد"
-  wordAudio: string;   // e.g. "/audio/alphabet/words/alif_fatha_asad.mp3"
+  wordAudio: string;   // e.g. "/audio/alphabet/words/01_asad.mp3"
   emoji: string;       // e.g. "🦁"
 }
 

@@ -5,7 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: './',
+    base: '/',
     publicDir: 'public',
     assetsInclude: ['**/*.mp3', '**/*.wav'],
     plugins: [react(), tailwindcss()],

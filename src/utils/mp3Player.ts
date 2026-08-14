@@ -57,7 +57,7 @@ let sessionBgMusicEnabled = true;
 let sessionBgMusicVolume = 0.03;
 
 /**
- * تحويل مسار الملف الصوتي إلى URL صالح ومُرمز للويب ومتوافق مع GitHub Pages والاستضافة الثابتة
+ * تحويل مسار الملف الصوتي إلى URL صالح ومُطلق للويب ومتوافق مع Vercel و Cloudflare Pages و GitHub Pages والاستضافات الثابتة
  */
 export function resolveAudioUrl(url: string): string {
   if (!url) return '';
@@ -67,25 +67,45 @@ export function resolveAudioUrl(url: string): string {
     url.startsWith('data:') ||
     url.startsWith('blob:')
   ) {
-    return encodeURI(url);
+    try {
+      return encodeURI(decodeURI(url));
+    } catch {
+      return encodeURI(url);
+    }
   }
 
-  // Get base URL from Vite (handles relative './', root '/', or custom subpath hosting like GitHub Pages)
+  // Safe decode first to prevent double-encoding, then clean leading slashes
+  let decoded = url;
+  try {
+    decoded = decodeURI(url);
+  } catch {
+    decoded = url;
+  }
+  const cleanPath = decoded.replace(/^(\.\/|\/)/, '');
+
+  // Get base URL from Vite (handles root '/', subpath hosting like '/my-repo/', or defaults to '/')
   const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as { env?: { BASE_URL?: string } }).env : undefined;
-  const baseUrl = metaEnv && metaEnv.BASE_URL ? metaEnv.BASE_URL : './';
+  let baseUrl = metaEnv && metaEnv.BASE_URL ? metaEnv.BASE_URL : '/';
 
-  // Strip leading slash or relative prefix for clean joining
-  const cleanPath = url.replace(/^(\.\/|\/)/, '');
-
-  let fullPath = '';
+  // Normalize base: if relative './' or empty, default to absolute root '/'
   if (baseUrl === './' || baseUrl === '') {
-    fullPath = `./${cleanPath}`;
-  } else {
-    const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-    fullPath = `${normalizedBase}${cleanPath}`;
+    baseUrl = '/';
   }
 
-  return encodeURI(fullPath);
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  const fullPath = `${normalizedBase}${cleanPath}`;
+  const encodedPath = encodeURI(fullPath);
+
+  // In browser runtime, convert to fully-qualified absolute URL based on window.location.origin
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    try {
+      return new URL(encodedPath, window.location.origin).href;
+    } catch {
+      return encodedPath;
+    }
+  }
+
+  return encodedPath;
 }
 
 /**
@@ -222,6 +242,16 @@ export function playBackgroundMusic(musicUrl: string = DEFAULT_BG_MUSIC_URL): vo
     bgAudioInstance = new Audio(resolvedUrl);
     bgAudioInstance.loop = true;
     bgAudioInstance.preload = 'auto';
+
+    bgAudioInstance.addEventListener('error', () => {
+      const err = bgAudioInstance?.error;
+      console.warn('[MP3 Player Diagnostic] Background music error:', {
+        src: bgAudioInstance?.src,
+        resolvedUrl,
+        errorCode: err?.code,
+        errorMessage: err?.message,
+      });
+    });
   } else if (bgAudioInstance.src !== resolvedUrl && !bgAudioInstance.src.endsWith(resolvedUrl)) {
     bgAudioInstance.src = resolvedUrl;
   }
@@ -378,20 +408,39 @@ export function playMP3(rawUrl: string): HTMLAudioElement | null {
       };
     }
 
-    audio.onerror = (e) => {
-      console.warn('[MP3 Player] Audio file load error for:', url, e);
-    };
+    // Diagnostic event listeners for audio lifecycle tracking
+    audio.addEventListener('loadeddata', () => {
+      // Audio data loaded successfully
+    });
+
+    audio.addEventListener('canplay', () => {
+      // Audio is ready to play
+    });
+
+    audio.addEventListener('error', () => {
+      const err = audio.error;
+      console.warn('[MP3 Player Diagnostic] Audio playback error:', {
+        src: audio.src,
+        resolvedUrl: url,
+        rawUrl: rawUrl,
+        errorCode: err?.code,
+        errorMessage: err?.message,
+      });
+    });
 
     const playPromise = audio.play();
     if (playPromise !== undefined) {
       playPromise.catch((err) => {
-        console.warn('[MP3 Player] Playback prevented or failed:', url, err);
+        console.warn('[MP3 Player Diagnostic] Playback promise rejected:', {
+          src: audio.src,
+          error: err?.message || err,
+        });
       });
     }
 
     return audio;
   } catch (err) {
-    console.warn('[MP3 Player] Audio initialization error:', url, err);
+    console.warn('[MP3 Player Diagnostic] Audio initialization error:', url, err);
     return null;
   }
 }
